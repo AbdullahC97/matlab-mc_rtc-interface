@@ -1,6 +1,7 @@
 function DataBase = ConvertBins2DataBase(data_folder,database_name)
 warning('off')
 %% Load bin files and convert to csv
+% list all bin files and convert them to csv using the mc_rtc command
 bin_files = dir(strcat(data_folder,'/*.bin'));
 fprintf("Converting bin files to csv files:\n")
 for i = 1:length(bin_files)
