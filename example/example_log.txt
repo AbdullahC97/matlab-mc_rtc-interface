@@ -1,0 +1,44 @@
+  # This is how I log the data in mc_rtc which makes it quite easy to iterate over the log entries.
+  
+  // Add all relevant data to the logger (is automatically updated)
+  logger().addLogEntries(this,
+    // Target references
+    "controlMode",      [this]() { return this->referenceMotion->getControlMode();},
+    "syncPosPanda1",    [this]() { return this->referenceMotion->getSyncPos(1);},
+    "syncPosPanda2",    [this]() { return this->referenceMotion->getSyncPos(2);},
+    "syncVelPanda1",    [this]() { return this->referenceMotion->getSyncVel(1);},
+    "syncVelPanda2",    [this]() { return this->referenceMotion->getSyncVel(2);},
+    "targetPosPanda1",  [this]() { return this->referenceMotion->getTargetPos(1);},
+    "targetPosPanda2",  [this]() { return this->referenceMotion->getTargetPos(2);},
+    "targetPosBox",     [this]() { return this->referenceMotion->getTargetPos(3);},
+    "targetVelPanda1",  [this]() { return this->referenceMotion->getTargetVel(1);},
+    "targetVelPanda2",  [this]() { return this->referenceMotion->getTargetVel(2);},
+    "targetVelBox",     [this]() { return this->referenceMotion->getTargetVel(3);},
+
+    // Real robot positions/velocities (should already be logged but the names are not very clear)
+    "realPosPanda1",    [this]() { return this->realRobot("panda_foot").bodyPosW("panda_foot").translation();},
+    "realPosPanda2",    [this]() { return this->realRobot("panda_2").bodyPosW("panda_foot").translation();},
+    "realPosBox",       [this]() { return this->robot("box").bodyPosW("box5_body").translation();},
+    "realVelPanda1",    [this]() { return this->realRobot("panda_foot").mbc().bodyVelW[robot("panda_foot").bodyIndexByName("panda_foot")].linear();},
+    "realVelPanda2",    [this]() { return this->realRobot("panda_2").mbc().bodyVelW[robot("panda_2").bodyIndexByName("panda_foot")].linear();},
+    "realVelBox",       [this]() { return this->robot("box").mbc().bodyVelW[robot("box").bodyIndexByName("box5_body")].linear();},
+
+    // Joint torques
+    "contTorquesPanda1",    [this]() { return this->robot("panda_foot").jointTorques();},
+    "contTorquesPanda2",    [this]() { return this->robot("panda_2").jointTorques();},
+    "realTorquesPanda1",    [this]() { return this->realRobot("panda_foot").jointTorques();},
+    "realTorquesPanda2",    [this]() { return this->realRobot("panda_2").jointTorques();},
+
+    // Motion generation parameters 
+    "pars_ImpVelMag",         [this]() { return this->referenceMotion->getParameters("vMag");},
+    "pars_ImpAngle",          [this]() { return this->referenceMotion->getParameters("angleImp");},
+    "pars_GainVecFieldAnte",  [this]() { return this->referenceMotion->getParameters("kFieldAnte");},
+    "pars_StartRadiusAnte",   [this]() { return this->referenceMotion->getParameters("rStartAnte");},
+    "pars_EndRadiusAnte",     [this]() { return this->referenceMotion->getParameters("rEndAnte");},
+    "pars_GainVecFieldPost",  [this]() { return this->referenceMotion->getParameters("kFieldPost");},
+    "pars_SwitchRadiusPost",  [this]() { return this->referenceMotion->getParameters("rSwitchPost");},
+    "pars_UseImpMap",         [this]() { return this->referenceMotion->getParameters("useImpMap");},
+    "pars_tSwitchPost",       [this]() { return this->referenceMotion->getParameters("tSwitchPost");},
+    "pars_useTimeSwitch",     [this]() { return this->referenceMotion->getParameters("useTimeSwitch");}
+
+  );
