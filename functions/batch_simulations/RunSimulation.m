@@ -1,8 +1,16 @@
 function status = RunSimulation(simSettings)
+
+if nargin < 1
+	simSettings.verbose = true;
+	simSettings.logController = false;
+end
+
+
+
 %% Starting Commands
 ctlcommand1 = "cd ; cd devel/time-invariant-dual-arm-panda-controller/build/";
 ctlcommand2 = "sudo make install; mc_click";
-ctlcommand = strcat(ctlcommand1,"; ",ctlcommand2);
+ctlcommand = strcat(ctlcommand1,"&& ",ctlcommand2);
 
 agxcommand1 = "cd ; cd devel/urdf-application/PythonApplication/";
 agxcommand2 = "sudo ../run-in-docker.sh examples/agx.sh models/DualPandaFootGrab.yml:DualPandaGrabBoxClick &";
@@ -19,16 +27,15 @@ try
         [returncode, output] = system(agxcommand);
         fprintf(" --> DONE\n")
 
-        fprintf("\tStarting Controller (enter sudo password here if controller didn't start):")
+        fprintf("\tStarting Controller:")
         if simSettings.logController
-            [returncode, output] = system(ctlcommand)
+            [returncode, output] = system(ctlcommand);
             fprintf("\n\tController --> FINISHED\n")
         else
             [returncode, output] = system(ctlcommand);
             fprintf(" --> DONE\n")
         end
         
-
         fprintf("\tTerminating AGX:")
         [returncode, output] = system(killcommand);
         fprintf(" --> DONE\n")

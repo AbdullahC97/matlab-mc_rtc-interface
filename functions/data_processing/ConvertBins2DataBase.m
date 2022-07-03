@@ -66,6 +66,8 @@ for f = 1:length(csv_files)
                 simData.Robots.(RobotNames(i)) = Robots{i};
             end
 
+
+
             % Save Motion generation parameters
             % find all log entries that start with "pars_"
             matched_columns = find(startsWith(data.Properties.VariableNames,parsprefix));
@@ -76,11 +78,18 @@ for f = 1:length(csv_files)
                 simData.Params.(new_parname{:}) = data.(idx)(end);
             end
 
+
+
             % Save controller data
             [modeActive, modeStart, ~] = unique(simData.ControlMode);
             simData.Controller.ModeActive = modeActive;
             simData.Controller.ModeStart = modeStart;
             simData.Controller.TimeStep = simData.Time(2) - simData.Time(1);
+
+            % manually compute box velocity (not available in log)
+            simData.Robots.Box.realVel.x = [simData.Robots.Box.realVel.x(1) 1/simData.Controller.TimeStep*diff(simData.Robots.Box.realPos.x).'];
+            simData.Robots.Box.realVel.y = [simData.Robots.Box.realVel.y(1) 1/simData.Controller.TimeStep*diff(simData.Robots.Box.realPos.y).'];
+            simData.Robots.Box.realVel.z = [simData.Robots.Box.realVel.z(1) 1/simData.Controller.TimeStep*diff(simData.Robots.Box.realPos.z).'];
 
             % save simulation data object
             simData.FileName = csv_file.name(1:end-4);

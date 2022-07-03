@@ -17,11 +17,11 @@ copiedBinFile = fullfile(simSettings.SaveFolder,strcat(newName,".bin"));
 copyfile(latestBinFile,copiedBinFile)
 
 for k = 1:length(parName)
-    parConfig.(parName(k)) = parValue{k}(parIndex(k));
+    parConfig.(sprintf("%s_%d",parName(k),k)) = parValue{k}(parIndex(k));
 end
 
 for k = 1:length(syncName)
-    parConfig.(syncName(k)) = syncValue{k}(parIndex(syncLayer(k)));
+    parConfig.(sprintf("%s_%d",syncName(k),k)) = syncValue{k}(parIndex(syncLayer(k)));
 end
 
 save(fullfile(simSettings.SaveFolder,parFolderName,strcat(newName,".mat")),"parConfig");

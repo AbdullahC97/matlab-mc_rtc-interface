@@ -1,0 +1,651 @@
+function PlotComparison(DataBase) %, plotOptions, formatOptions, formatPlots)
+%% Get minimal and maximal time span + control mode index for each simulation
+nSims = length(DataBase);
+
+plotPos = false;
+plotVel = false;
+plotTorque = false;
+
+
+fprintf("Comparing %d files:\n",nSims);
+
+MinStartMode = [inf,inf,inf,inf];
+MaxStartMode = [0,0,0,0];
+
+for i = 1:nSims
+    fprintf("\tFile: %s\n",DataBase(i).FileName);
+    ModeStart = DataBase(i).Controller.ModeStart;
+    for j = 1:length(ModeStart)
+        if (ModeStart(j) < MinStartMode(j))
+            MinStartMode(j) = ModeStart(j);
+            iMinStartMode(j) = i;
+        end
+
+        if (ModeStart(j) > MaxStartMode(j))
+            MaxStartMode(j) = ModeStart(j);
+            iMaxStartMode(j) = i;
+        end
+    end
+
+    MinBoundTsim(i) = DataBase(i).Time(1);
+    MaxBoundTsim(i) = DataBase(i).Time(end);
+end
+
+[MinTime,iMinLoc] = min(MinBoundTsim);
+[MaxTime,iMaxLoc] = max(MaxBoundTsim);
+
+time = union(DataBase(iMinLoc).Time,DataBase(iMaxLoc).Time);
+
+startMode = 2;
+plotTimeRange = [DataBase(iMinStartMode(startMode)).Time(MinStartMode(startMode)), MaxTime];
+
+iMode = [3,3];
+plotZoomRange = [DataBase(iMinStartMode(iMode(1))).Time(MinStartMode(iMode(1))), 1.1*DataBase(iMaxStartMode(iMode(2))).Time(MaxStartMode(iMode(2)))];
+
+%% Plotting Parameters
+robotNames = fieldnames(DataBase(1).Robots);
+modeIndex = [MinStartMode(1:3),MaxStartMode(end), length(DataBase(iMaxLoc).Time)];
+modeStart = time(modeIndex);
+% shownModes = modeIndex;
+fitDir = ["x","y","z"];
+modeColors = ["y","b","r","g"];
+yFill = [0 0 1 1];
+spacer = @(n) strcat('$',repmat('\quad',1,n),'$');
+
+%% Save Parameters as Text File
+% if isfield(plotOptions,"SaveParams") && plotOptions.SaveParams
+%     table = rows2vars(struct2table(simData.Params));
+%     table.Properties.VariableNames = ["Parameter", "Value"];
+%     writetable(table,fullfile(plotOptions.SaveFolder,"params.txt"),"Delimiter","\t");
+% end
+
+%% Plot Position
+options1.numPlots = [2,3];
+options1.ratioSize.x = [0.75, 0.25];
+options1.ratioSize.y = [1,1,1];
+options1.padding.in = [0.05,0.025];
+options1.padding.out = [0.05,0.05];
+options1.showControlBar = true;
+options1.yRatioControlBar = 0.01;
+options1.yRatioControlLegend = 0.3;
+options1.yExtra = 0.15;
+options1.showLegend = true;
+options1.yRatioLegend = 0.1;
+options1.hideXLabels = true;
+options1.hideYLabels = false;
+options1.linkAxes = 'x';
+
+titleRobots = ["Panda 1","Panda 2", "Box"];
+
+if plotPos
+    for r = 1:length(robotNames)
+        titleText = sprintf("Position Data:\nRobot: %s, Experiments: %d",titleRobots(r), nSims);
+        curRobotName = robotNames{r};
+        % Default Format Plot
+        formatDefault.name = strcat("Position_",curRobotName);
+        formatDefault.figWidth = 1;
+        formatDefault.figHeight = 0.98;
+        formatDefault.fontSize = 20;
+        formatDefault.xLineWidth = 2; %formatOptions.xLineWidth;
+        formatDefault.lineWidth = linspace(10,1,nSims);
+        formatDefault.yLabels = ["$\mathbf{p}_x$ [m]","$\mathbf{p}_y$ [m]","$\mathbf{p}_z$ [m]"];
+        formatDefault.xLabels = "$t$ [s]";
+
+        if nargin > 3 && isfield(formatPlots,"Position")
+            formatUser = formatPlots.Position;
+            formatDefault = overwriteFormat(formatDefault, formatUser);
+        end
+
+        fig = figure('Name',formatDefault.name);
+        set(fig,'units','normalized','outerposition',[0 0 formatDefault.figWidth formatDefault.figHeight]);
+        [h,legendPos] = CreateCustomCanvas(fig,options1);
+        numPlotsX = options1.numPlots(1);
+        numPlotsY = options1.numPlots(2)+options1.showControlBar;
+        % Plot Data
+        for i = 1:numPlotsX
+            for j = 1:numPlotsY
+                curAxis = h(j,i);
+                hold(curAxis,"on");
+                if options1.showControlBar &&  j == numPlotsY
+                    % Plot Control Modes (small bars below plots)
+                    for m = 1:length(modeIndex)-1
+                        mode(m) = fill(curAxis,[time(modeIndex(m:m+1)).' flip(time(modeIndex(m:m+1))).'],yFill,modeColors(m));
+                    end
+                else
+                    % Plot vertical dashed lines to indicate control modes
+                    for m = 1:length(modeIndex)-1
+                        modePlot(m) = xline(curAxis,time(modeIndex(m)),'--','LineWidth',formatDefault.xLineWidth,'Color',modeColors(m));
+                    end
+
+                    % Plot actual data
+                    for k = 1:length(DataBase)
+                        curRobot = DataBase(k).Robots.(curRobotName);
+                        pos(k) = plot(curAxis,DataBase(k).Time,curRobot.realPos.(fitDir(j)),'LineWidth',formatDefault.lineWidth(k));
+                    end
+
+                end
+
+
+
+            end
+        end
+
+        FormatCustomPlot(h,options1);
+        set(h(:,:),'FontSize',formatDefault.fontSize)
+        set(h(1,1),"XLim",[plotTimeRange(1) plotTimeRange(end)])
+        set(h(1,2),"XLim",[plotZoomRange(1) plotZoomRange(end)])
+        text = sprintf('Enlarged between \n$t = %.3f$ [s] and $t = %.3f$ [s]',[plotZoomRange(1), plotZoomRange(end)]);
+        title(h(1,2),text,'interpreter','latex')
+        title(h(1,1),titleText,'interpreter','latex')
+
+        xlabel(h(end,:),formatDefault.xLabels,'interpreter','latex')
+        for i = 1:3
+            ylabel(h(i,1),formatDefault.yLabels(i),'interpreter','latex')
+        end
+
+        ns = 1; % 2
+        modeLegend = legend([transpose(mode)],{['Initial Mode',spacer(ns)],['Ante-impact Mode',spacer(ns)],['Intermediate Mode',spacer(ns)],['Post-impact Mode',spacer(ns)]}.','interpreter','latex','NumColumns',4,'box','off');
+        modeLegend.Position(1:2) = [0.5 legendPos{1}.Position(2)]+[-modeLegend.Position(3)/2 0];
+
+        %     if plotOptions.SavePlots
+        %         saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,formatDefault.name,'.png')))
+        %         saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,formatDefault.name)),'epsc')
+        %     end
+
+    end
+
+end
+%% Plot Velocity
+options1.numPlots = [2,3];
+options1.ratioSize.x = [0.75, 0.25];
+options1.ratioSize.y = [1,1,1];
+options1.padding.in = [0.05,0.025];
+options1.padding.out = [0.05,0.05];
+options1.showControlBar = true;
+options1.yRatioControlBar = 0.01;
+options1.yRatioControlLegend = 0.3;
+options1.yExtra = 0.15;
+options1.showLegend = true;
+options1.yRatioLegend = 0.1;
+options1.hideXLabels = true;
+options1.hideYLabels = false;
+options1.linkAxes = 'x';
+
+titleRobots = ["Panda 1","Panda 2", "Box"];
+
+if plotVel
+
+    for r = 1:length(robotNames)
+        titleText = sprintf("Velocity Data:\nRobot: %s, Experiments: %d",titleRobots(r), nSims);
+        curRobotName = robotNames{r};
+        % Default Format Plot
+        formatDefault.name = strcat("Velocity_",curRobotName);
+        formatDefault.figWidth = 1;
+        formatDefault.figHeight = 0.98;
+        formatDefault.fontSize = 20;
+        formatDefault.xLineWidth = 2; %formatOptions.xLineWidth;
+        formatDefault.lineWidth = linspace(10,1,nSims);
+        formatDefault.yLabels = ["$\dot{\mathbf{p}}_x$ [m/s]","$\dot{\mathbf{p}}_y$ [m/s]","$\dot{\mathbf{p}}_z$ [m/s]"];
+        formatDefault.xLabels = "$t$ [s]";
+
+        if nargin > 3 && isfield(formatPlots,"Position")
+            formatUser = formatPlots.Position;
+            formatDefault = overwriteFormat(formatDefault, formatUser);
+        end
+
+        fig = figure('Name',formatDefault.name);
+        set(fig,'units','normalized','outerposition',[0 0 formatDefault.figWidth formatDefault.figHeight]);
+        [h,legendPos] = CreateCustomCanvas(fig,options1);
+        numPlotsX = options1.numPlots(1);
+        numPlotsY = options1.numPlots(2)+options1.showControlBar;
+        % Plot Data
+        for i = 1:numPlotsX
+            for j = 1:numPlotsY
+                curAxis = h(j,i);
+                hold(curAxis,"on");
+                if options1.showControlBar &&  j == numPlotsY
+                    % Plot Control Modes (small bars below plots)
+                    for m = 1:length(modeIndex)-1
+                        mode(m) = fill(curAxis,[time(modeIndex(m:m+1)).' flip(time(modeIndex(m:m+1))).'],yFill,modeColors(m));
+                    end
+                else
+                    % Plot vertical dashed lines to indicate control modes
+                    for m = 1:length(modeIndex)-1
+                        modePlot(m) = xline(curAxis,time(modeIndex(m)),'--','LineWidth',formatDefault.xLineWidth,'Color',modeColors(m));
+                    end
+
+                    % Plot actual data
+                    for k = 1:length(DataBase)
+                        curRobot = DataBase(k).Robots.(curRobotName);
+                        pos(k) = plot(curAxis,DataBase(k).Time,curRobot.realVel.(fitDir(j)),'LineWidth',formatDefault.lineWidth(k));
+                    end
+
+                end
+
+
+
+            end
+        end
+
+        FormatCustomPlot(h,options1);
+        set(h(:,:),'FontSize',formatDefault.fontSize)
+        set(h(1,1),"XLim",[plotTimeRange(1) plotTimeRange(end)])
+        set(h(1,2),"XLim",[plotZoomRange(1) plotZoomRange(end)])
+        text = sprintf('Enlarged between \n$t = %.3f$ [s] and $t = %.3f$ [s]',[plotZoomRange(1), plotZoomRange(end)]);
+        title(h(1,2),text,'interpreter','latex')
+        title(h(1,1),titleText,'interpreter','latex')
+
+        xlabel(h(end,:),formatDefault.xLabels,'interpreter','latex')
+        for i = 1:3
+            ylabel(h(i,1),formatDefault.yLabels(i),'interpreter','latex')
+        end
+
+        ns = 1; % 2
+        modeLegend = legend([transpose(mode)],{['Initial Mode',spacer(ns)],['Ante-impact Mode',spacer(ns)],['Intermediate Mode',spacer(ns)],['Post-impact Mode',spacer(ns)]}.','interpreter','latex','NumColumns',4,'box','off');
+        modeLegend.Position(1:2) = [0.5 legendPos{1}.Position(2)]+[-modeLegend.Position(3)/2 0];
+
+        %     if plotOptions.SavePlots
+        %         saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,formatDefault.name,'.png')))
+        %         saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,formatDefault.name)),'epsc')
+        %     end
+
+    end
+
+end
+
+%% Plot Torques
+options3.numPlots = [2,7];
+options3.ratioSize.x = [0.75, 0.25];
+options3.ratioSize.y = [1,1,1,1,1,1,1];
+options3.padding.in = [0.05,0.025];
+options3.padding.out = [0.075,0.05];
+options3.showControlBar = true;
+options3.yRatioControlBar = 0.01;
+options3.yRatioControlLegend = 0.3;
+options3.yExtra = 0.15;
+options3.showLegend = true;
+options3.yRatioLegend = 0.05;
+options3.hideXLabels = true;
+options3.hideYLabels = false;
+options3.linkAxes = 'x';
+
+titleRobots = ["Panda 1","Panda 2", "Box"];
+
+if plotTorque
+    for r = 1:length(robotNames)-1
+        titleText = sprintf("Torque Data:\nRobot: %s, Experiments: %d",titleRobots(r), nSims);
+        curRobotName = robotNames{r};
+        % Default Format Plot
+        formatDefault.name = strcat("Torque",curRobotName);
+        formatDefault.figWidth = 1;
+        formatDefault.figHeight = 0.98;
+        formatDefault.fontSize = 20;
+        formatDefault.xLineWidth = 2; %formatOptions.xLineWidth;
+        formatDefault.lineWidth = linspace(10,1,nSims);
+        formatDefault.yLabels = compose("$\\mathbf{\\tau}_{%d}$",1:options3.numPlots(2));
+        formatDefault.yLabels(1) = strcat(formatDefault.yLabels(1)," [Nm]");
+        formatDefault.xLabels = "$t$ [s]";
+
+
+        if nargin > 3 && isfield(formatPlots,"Position")
+            formatUser = formatPlots.Position;
+            formatDefault = overwriteFormat(formatDefault, formatUser);
+        end
+
+        fig = figure('Name',formatDefault.name);
+        set(fig,'units','normalized','outerposition',[0 0 formatDefault.figWidth formatDefault.figHeight]);
+        [h,legendPos] = CreateCustomCanvas(fig,options3);
+        numPlotsX = options3.numPlots(1);
+        numPlotsY = options3.numPlots(2)+options3.showControlBar;
+        % Plot Data
+        for i = 1:numPlotsX
+            for j = 1:numPlotsY
+                curAxis = h(j,i);
+                hold(curAxis,"on");
+                if options3.showControlBar &&  j == numPlotsY
+                    % Plot Control Modes (small bars below plots)
+                    for m = 1:length(modeIndex)-1
+                        mode(m) = fill(curAxis,[time(modeIndex(m:m+1)).' flip(time(modeIndex(m:m+1))).'],yFill,modeColors(m));
+                    end
+                else
+                    % Plot vertical dashed lines to indicate control modes
+                    for m = 1:length(modeIndex)-1
+                        modePlot(m) = xline(curAxis,time(modeIndex(m)),'--','LineWidth',formatDefault.xLineWidth,'Color',modeColors(m));
+                    end
+
+                    % Plot actual data
+                    for k = 1:length(DataBase)
+                        curRobot = DataBase(k).Robots.(curRobotName);
+                        torq(k) = plot(curAxis,DataBase(k).Time,curRobot.realTorques.(strcat('J',num2str(j))),'LineWidth',formatDefault.lineWidth(k));
+                    end
+
+
+                end
+
+            end
+        end
+
+        FormatCustomPlot(h,options3);
+
+        set(h(:,:),'FontSize',formatDefault.fontSize)
+        set(h(1,1),"XLim",[plotTimeRange(1) plotTimeRange(end)])
+        set(h(1,2),"XLim",[plotZoomRange(1) plotZoomRange(end)])
+        text = sprintf('Enlarged between \n$t = %.3f$ [s] and $t = %.3f$ [s]',[plotZoomRange(1), plotZoomRange(end)]);
+        title(h(1,2),text,'interpreter','latex')
+        title(h(1,1),titleText,'interpreter','latex')
+
+        xlabel(h(end,:),formatDefault.xLabels,'interpreter','latex')
+        for i = 1:3
+            ylabel(h(i,1),formatDefault.yLabels(i),'interpreter','latex')
+        end
+
+        ns = 1; % 2
+        modeLegend = legend([transpose(mode)],{['Initial Mode',spacer(ns)],['Ante-impact Mode',spacer(ns)],['Intermediate Mode',spacer(ns)],['Post-impact Mode',spacer(ns)]}.','interpreter','latex','NumColumns',4,'box','off');
+        modeLegend.Position(1:2) = [0.5 legendPos{1}.Position(2)]+[-modeLegend.Position(3)/2 0];
+
+
+        %     if plotOptions.SavePlots
+        %         saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,name,'.png')))
+        %         saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,name)),'epsc')
+        %     end
+
+    end
+
+
+
+end
+
+
+
+
+
+
+
+
+
+
+
+
+%{
+
+
+
+
+
+
+
+%% Plotting Parameters
+robotNames = fieldnames(simData.Robots);
+modeIndex = [modeStart; length(time)];
+shownModes = modeIndex;
+fitDir = ["x","y","z"];
+modeColors = ["y","b","r","g"];
+yFill = [0 0 1 1];
+
+if isfield(formatOptions,"onlyShowControlModes") && ~isempty(formatOptions.onlyShowControlModes)
+    shownModes = modeIndex([formatOptions.onlyShowControlModes,formatOptions.onlyShowControlModes(end)+1]);
+    plotTimeRange = time([shownModes(1) shownModes(end)]);
+else
+    plotTimeRange = time([1 end]);
+end
+
+if isfield(formatOptions,"nCutTime") && formatOptions.nCutTime 
+    iStart = shownModes(1) + round((shownModes(2)-shownModes(1))*formatOptions.nCutBegin);
+    iEnd = round(shownModes(end-1) + (shownModes(end)-shownModes(end-1))*formatOptions.nCutEnd);
+    plotTimeRange = time([iStart,iEnd]); 
+end
+
+
+
+%% Plot Position (+ Around Impact)
+options1.numPlots = [2,3];
+options1.ratioSize.x = [0.75, 0.25];
+options1.ratioSize.y = [1,1,1];
+options1.padding.in = [0.05,0.025];
+options1.padding.out = [0.05,0.05];
+options1.showControlBar = true;
+options1.yRatioControlBar = 0.01;
+options1.yRatioControlLegend = 0.3;
+options1.yExtra = 0.15;
+options1.showLegend = true;
+options1.yRatioLegend = 0.1;
+options1.hideXLabels = true;
+options1.hideYLabels = false;
+options1.linkAxes = 'x';
+
+lineWidth = [6 4.5 3];
+
+if isfield(plotOptions,"Position") && plotOptions.Position
+    % Default Format Plot
+    formatDefault.name = "Position";
+    formatDefault.figWidth = formatOptions.figWidth;
+    formatDefault.figHeight = formatOptions.figHeight;
+    formatDefault.fontSize = formatOptions.fontSize;
+    formatDefault.xLineWidth = formatOptions.xLineWidth;
+    formatDefault.lineWidth = [6 4.5 3];
+    formatDefault.yLabels = ["$\mathbf{p}_x$ [m]","$\mathbf{p}_y$ [m]","$\mathbf{p}_z$ [m]"];
+    formatDefault.xLabels = "$t$ [s]";
+
+    if nargin > 3 && isfield(formatPlots,"Position")
+        formatUser = formatPlots.Position;
+        formatDefault = overwriteFormat(formatDefault, formatUser);
+    end
+
+    fig = figure('Name',formatDefault.name);
+    set(fig,'units','normalized','outerposition',[0 0 formatDefault.figWidth formatDefault.figHeight]);
+    [h,legendPos] = CreateCustomCanvas(fig,options1);
+    numPlotsX = options1.numPlots(1);
+    numPlotsY = options1.numPlots(2)+options1.showControlBar;
+    % Plot Data
+    for i = 1:numPlotsX
+        for j = 1:numPlotsY
+            curAxis = h(j,i);
+            hold(curAxis,"on");
+            if options1.showControlBar &&  j == numPlotsY
+                % Plot Control Modes (small bars below plots)
+                for m = 1:length(modeStart)
+                    mode(m) = fill(curAxis,[time(modeIndex(m:m+1)).' flip(time(modeIndex(m:m+1))).'],yFill,modeColors(m));
+                end
+            else
+                % Plot vertical dashed lines to indicate control modes
+                for m = 1:length(modeStart)
+                    modePlot(m) = xline(curAxis,time(modeStart(m)),'--','LineWidth',formatDefault.xLineWidth,'Color',modeColors(m));
+                end
+
+                % Plot actual data
+                for k = 1:length(robotNames)
+                    curRobot = simData.Robots.(robotNames{k});
+                    pos(k) = plot(curAxis,time,curRobot.realPos.(fitDir(j)),'LineWidth',formatDefault.lineWidth(k));
+                end
+            end
+    
+        end
+    end
+    
+    FormatCustomPlot(h,options1);
+    set(h(:,:),'FontSize',formatDefault.fontSize)
+    set(h(1,1),"XLim",[plotTimeRange(1) plotTimeRange(end)])
+    set(h(1,2),"XLim",impTime + [-formatOptions.zoomTime,formatOptions.zoomTime])
+    text = sprintf('Enlarged between \n$t = %.3f$ [s] and $t = %.3f$ [s]',impTime + [-formatOptions.zoomTime,formatOptions.zoomTime]);
+    title(h(1,2),text,'interpreter','latex')
+    xlabel(h(end,:),formatDefault.xLabels,'interpreter','latex')
+    for i = 1:3
+        ylabel(h(i,1),formatDefault.yLabels(i),'interpreter','latex')
+    end
+    
+    ns = 1; % 2
+    modeLegend = legend([transpose(mode)],{['Initial Mode',spacer(ns)],['Ante-impact Mode',spacer(ns)],['Intermediate Mode',spacer(ns)],['Post-impact Mode',spacer(ns)]}.','interpreter','latex','NumColumns',4,'box','off');
+    ns = 1; %35
+    plotLegend = legend([transpose(pos)],{['Cartesian Position: Panda 1 ',spacer(ns)],['Cartesian Position: Panda 2 ',spacer(ns)],['Cartesian Position: Box ',spacer(ns)]}.','interpreter','latex','box','off');
+    modeLegend.Position(1:2) = [0.5 legendPos{1}.Position(2)]+[-modeLegend.Position(3)/2 0];
+    plotLegend.Position(1:2) = legendPos{2}.Position(1:2);
+
+    if plotOptions.SavePlots
+        saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,formatDefault.name,'.png')))
+        saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,formatDefault.name)),'epsc')
+    end 
+
+end
+
+
+%% Plot Velocity + Reference + Around Impact
+options2 = options1;
+if isfield(plotOptions,"Velocity") && plotOptions.Velocity
+    name = "Velocity";
+    fig = figure('Name',name);
+    set(fig,'units','normalized','outerposition',[0 0 formatOptions.figWidth formatOptions.figHeight]);
+    [h,legendPos] = CreateCustomCanvas(fig,options2);
+    lineWidth = [6 4.5 3; 5 3.5 3];
+    numPlotsX = options2.numPlots(1);
+    numPlotsY = options2.numPlots(2)+options2.showControlBar;
+    refIndex = {modeIndex(2)+1:modeIndex(3)-1,modeIndex(2)+1:modeIndex(3)-1,modeIndex(4)+1:modeIndex(end)};
+    % Plot Data
+    for i = 1:numPlotsX
+        for j = 1:numPlotsY
+            curAxis = h(j,i);
+            hold(curAxis,"on");
+            if options2.showControlBar &&  j == numPlotsY
+                % Plot Control Modes (small bars below plots)
+                for m = 1:length(modeStart)
+                    mode(m) = fill(curAxis,[time(modeIndex(m:m+1)).' flip(time(modeIndex(m:m+1))).'],yFill,modeColors(m));
+                end
+
+            else 
+                % Plot vertical dashed lines to indicate control modes
+                for m = 1:length(modeStart)
+                    modePlot(m) = xline(curAxis,time(modeStart(m)),'--','LineWidth',formatOptions.xLineWidth,'Color',modeColors(m));
+                end
+                
+                % Plot actual data
+                for k = 1:length(robotNames)
+                    curRobot = simData.Robots.(robotNames{k});
+                    vel(k) = plot(curAxis,time,curRobot.realVel.(fitDir(j)),'LineWidth',lineWidth(1,k));
+                end
+
+                for k = 1:length(robotNames)-1
+                    curRobot = simData.Robots.(robotNames{k});
+                    ref(k) = plot(curAxis,time(refIndex{k}),curRobot.targetVel.(fitDir(j))(refIndex{k}),'--','LineWidth',lineWidth(2,k));
+                end
+
+            end
+    
+        end
+    end
+    
+    % Format Plot
+    yLabels = ["$\dot{\mathbf{p}}_x$ [m/s]","$\dot{\mathbf{p}}_y$ [m/s]","$\dot{\mathbf{p}}_z$ [m/s]"];
+    xLabels = ["$t$ [s]"];
+    
+    FormatCustomPlot(h,options2);
+    set(h(:,:),'FontSize',formatOptions.fontSize)
+    set(h(1,1),"XLim",[plotTimeRange(1) plotTimeRange(end)])
+    set(h(1,2),"XLim",impTime + [-formatOptions.zoomTime,formatOptions.zoomTime])
+    text = sprintf('Enlarged between \n$t = %.3f$ [s] and $t = %.3f$ [s]',impTime + [-formatOptions.zoomTime,formatOptions.zoomTime]);
+    title(h(1,2),text,'interpreter','latex','FontSize',formatOptions.fontSize)
+    xlabel(h(end,:),xLabels,'interpreter','latex','FontSize',formatOptions.fontSize)
+    for i = 1:length(yLabels)
+        ylabel(h(i,1),yLabels(i),'interpreter','latex','FontSize',formatOptions.fontSize)
+    end
+    
+    
+    ns = 2;
+    modeLegend = legend([transpose(mode)],{['Initial Mode',spacer(ns)],['Ante-impact Mode',spacer(ns)],['Intermediate Mode',spacer(ns)],['Post-impact Mode',spacer(ns)]}.','interpreter','latex','NumColumns',4,'box','off');
+    ns = 10;
+    plotLegend = legend([transpose([vel ref])],{['Cartesian Velocity: Panda 1',spacer(ns)],['Cartesian Velocity: Panda 2',spacer(ns)],['Cartesian Velocity: Box',spacer(ns)] ...
+        ['Reference Velocity: Panda 1',spacer(ns)],['Reference Velocity: Panda 2',spacer(ns)],['Reference Velocity: Box',spacer(ns)]}.','interpreter','latex','NumColumns',2);
+    modeLegend.Position = legendPos{1}.Position;
+    plotLegend.Position = legendPos{2}.Position;
+
+    if plotOptions.SavePlots
+        saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,name,'.png')))
+        saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,name)),'epsc')
+    end  
+
+end
+
+
+%% Plot Torques
+options3.numPlots = [2,7];
+options3.ratioSize.x = [0.75, 0.25];
+options3.ratioSize.y = [1,1,1,1,1,1,1];
+options3.padding.in = [0.05,0.025];
+options3.padding.out = [0.075,0.05];
+options3.showControlBar = true;
+options3.yRatioControlBar = 0.01;
+options3.yRatioControlLegend = 0.3;
+options3.yExtra = 0.15;
+options3.showLegend = true;
+options3.yRatioLegend = 0.05;
+options3.hideXLabels = true;
+options3.hideYLabels = false;
+options3.linkAxes = 'x';
+
+lineWidth = [6 4.5 3];
+
+if isfield(plotOptions,"Torque") &&  plotOptions.Torque
+    name = "Torques";
+    fig = figure('Name',name);
+    set(fig,'units','normalized','outerposition',[0 0 formatOptions.figWidth formatOptions.figHeight]);
+    [h,legendPos] = CreateCustomCanvas(fig,options3);
+    numPlotsX = options3.numPlots(1);
+    numPlotsY = options3.numPlots(2)+options3.showControlBar;
+    % Plot Data
+    for i = 1:numPlotsX
+        for j = 1:numPlotsY
+            curAxis = h(j,i);
+            hold(curAxis,"on");
+            if options3.showControlBar &&  j == numPlotsY
+                % Plot Control Modes (small bars below plots)
+                for m = 1:length(modeStart)
+                    mode(m) = fill(curAxis,[time(modeIndex(m:m+1)).' flip(time(modeIndex(m:m+1))).'],yFill,modeColors(m));
+                end
+            else
+                % Plot vertical dashed lines to indicate control modes
+                for m = 1:length(modeStart)
+                    modePlot(m) = xline(curAxis,time(modeStart(m)),'--','LineWidth',formatOptions.xLineWidth,'Color',modeColors(m));
+                end
+    
+                % Plot actual data
+                for k = 1:2
+                    curRobot = simData.Robots.(robotNames{k});
+                    torq(k) = plot(curAxis,time,curRobot.realTorques.(strcat('J',num2str(j))),'LineWidth',lineWidth(k));
+                end
+            end
+    
+        end
+    end
+    
+    % Format Plot
+    yLabels = compose("$\\mathbf{\\tau}_{%d}$",1:options3.numPlots(2)); 
+    yLabels(1) = strcat(yLabels(1)," [Nm]");
+    xLabels = ["$t$ [s]"];
+    
+
+    FormatCustomPlot(h,options3);
+    set(h(:,:),'FontSize',formatOptions.fontSize)
+    set(h(1,1),"XLim",[plotTimeRange(1) plotTimeRange(end)])
+    set(h(1,2),"XLim",impTime + [-formatOptions.zoomTime,formatOptions.zoomTime])
+    text = sprintf('Enlarged between \n$t = %.3f$ [s] and $t = %.3f$ [s]',impTime + [-formatOptions.zoomTime,formatOptions.zoomTime]);
+    title(h(1,2),text,'interpreter','latex','FontSize',formatOptions.fontSize)
+    xlabel(h(end,:),xLabels,'interpreter','latex','FontSize',formatOptions.fontSize)
+    for i = 1:length(yLabels)
+        ylabel(h(i,1),yLabels(i),'interpreter','latex','FontSize',formatOptions.fontSize)
+    end
+    
+    
+    ns = 2;
+    modeLegend = legend([transpose(mode)],{['Initial Mode',spacer(ns)],['Ante-impact Mode',spacer(ns)],['Intermediate Mode',spacer(ns)],['Post-impact Mode',spacer(ns)]}.','interpreter','latex','NumColumns',4,'box','off');
+    ns = 35;
+    plotLegend = legend([transpose(torq)],{['Joint Torques: Panda 1 ',spacer(ns)],['Joint Torques: Panda 2 ',spacer(ns)]}.','interpreter','latex');
+    modeLegend.Position = legendPos{1}.Position;
+    plotLegend.Position = legendPos{2}.Position;
+
+    if plotOptions.SavePlots
+        saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,name,'.png')))
+        saveas(gcf,fullfile(plotOptions.SaveFolder,strcat(plotOptions.PreFix,name)),'epsc')
+    end 
+
+end
+%}
+%% Function END
+end
